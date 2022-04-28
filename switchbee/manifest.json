@@ -1,0 +1,11 @@
+{
+  "domain": "switchbee",
+  "name": "SwitchBee",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/switchbee",
+  "requirements": ["pyswitchbee==0.0.11"],
+  "codeowners": ["@jafar-atili"],
+  "iot_class": "local_polling",
+  "version": "1.0.0"
+	
+}
