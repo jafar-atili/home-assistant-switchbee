@@ -16,6 +16,7 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -155,6 +156,10 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(
                 "Failed to fetch devices states from the central unit status=%s", exp
             )
+            if switchbee.STATUS_INVALID_TOKEN in str(exp):
+                raise ConfigEntryAuthFailed(
+                    "Invalid Token, make sure the user you configured is not being used by another platform via API, please re-authenticate with a different user"
+                ) from switchbee.SwitchBeeError
             raise UpdateFailed(
                 f"Error communicating with API: {exp}"
             ) from switchbee.SwitchBeeError
@@ -162,6 +167,8 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
             states = result[switchbee.ATTR_DATA]
             for state in states:
                 if state[switchbee.ATTR_ID] in self._devices:
+                    if state[switchbee.ATTR_ID] == 41:
+                        print(state)
                     self._devices[state[switchbee.ATTR_ID]]["state"] = state["state"]
                     self._devices[state[switchbee.ATTR_ID]][
                         "uid"

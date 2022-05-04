@@ -94,9 +94,6 @@ class Device(CoordinatorEntity, LightEntity):
 
                 self._attr_brightness = brightness_switchbee_to_hass(state)
                 self._last_brightness = self._attr_brightness
-                print(
-                    f"Updating {self._device_id} last brightness to {self._last_brightness}"
-                )
 
         super()._handle_coordinator_update()
 
@@ -115,7 +112,6 @@ class Device(CoordinatorEntity, LightEntity):
                 state = brightness_hass_to_switchbee(kwargs[ATTR_BRIGHTNESS])
 
         else:
-            print(self.coordinator.data[self._device_id])
             # Set the last brightness we know
             if not self._last_brightness:
                 # First turn on, set the light brightness to the last brightness the HUB remembers

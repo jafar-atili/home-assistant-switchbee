@@ -1,6 +1,7 @@
 """Support for SwitchBee cover."""
 
 import logging
+import time
 
 import switchbee
 
@@ -31,7 +32,6 @@ async def async_setup_entry(
 ) -> None:
     """Set up SwitchBee switch."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    print(coordinator.data)
     async_add_entities(
         Device(hass, coordinator.data[device], coordinator)
         for device in coordinator.data
@@ -63,6 +63,7 @@ class Device(CoordinatorEntity, CoverEntity):
             CoverEntityFeature.CLOSE
             | CoverEntityFeature.OPEN
             | CoverEntityFeature.SET_POSITION
+            | CoverEntityFeature.STOP
         )
         self._attr_device_class = DEVICE_CLASS_MAP[device["type"]]
 
@@ -98,9 +99,34 @@ class Device(CoordinatorEntity, CoverEntity):
             return
         await self.async_set_cover_position(position=0)
 
+    async def _update_cover_position_from_central_unit(self):
+        """Set the cover position in HAAS based on the central unit."""
+        try:
+            curr_pos = await self.coordinator.api.get_state(self._device_id)
+            curr_pos = curr_pos[switchbee.ATTR_DATA]
+        except switchbee.SwitchBeeError as exp:
+            _LOGGER.error("Failed to get %s position, error: %s", self._attr_name, exp)
+            return -1
+        else:
+            self.coordinator.data[self._device_id][switchbee.ATTR_STATE] = curr_pos
+            self.coordinator.async_set_updated_data(self.coordinator.data)
+
+    async def async_stop_cover(self, **kwargs):
+        """Stop a moving cover."""
+        # to stop the shutter, we just interrupt it with any state during operation
+        await self.async_set_cover_position(
+            position=self.current_cover_position, force=True
+        )
+        # wait 2 seconds and update the current position in the entity
+        time.sleep(2)
+        await self._update_cover_position_from_central_unit()
+
     async def async_set_cover_position(self, **kwargs):
         """Async function to set position to cover."""
-        if self._attr_current_cover_position == kwargs[ATTR_POSITION]:
+        if (
+            self._attr_current_cover_position == kwargs[ATTR_POSITION]
+            and "force" not in kwargs
+        ):
             return
         try:
             ret = await self.coordinator.api.set_state(
