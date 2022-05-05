@@ -26,7 +26,6 @@ async def async_setup_entry(
         for device in coordinator.data
         if coordinator.data[device]["type"]
         in [
-            switchbee.TYPE_SWITCH,
             switchbee.TYPE_TIMED_POWER,
             switchbee.TYPE_GROUP_SWITCH,
         ]

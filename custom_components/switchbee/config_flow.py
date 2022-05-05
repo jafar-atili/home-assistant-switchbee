@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from switchbee import ATTR_DATA, ATTR_MAC, SwitchBeeAPI, SwitchBeeError
+from switchbee import ATTR_DATA, ATTR_MAC, ATTR_NAME, SwitchBeeAPI, SwitchBeeError
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -55,7 +55,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]):
 
     try:
         resp = await api.get_configuration()
-        return resp[ATTR_DATA][ATTR_MAC]
+        return resp[ATTR_DATA][ATTR_MAC], resp[ATTR_DATA][ATTR_NAME]
     except SwitchBeeError as exp:
         _LOGGER.error(exp)
         raise CannotConnect from SwitchBeeError
@@ -65,6 +65,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SwitchBee Smart Home."""
 
     VERSION = 1
+
+    def __init__(self) -> None:
+        self._name = None
 
     async def async_step_user(self, user_input=None):
         """Show the setup form to the user."""
@@ -76,7 +79,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         try:
-            mac = await validate_input(self.hass, user_input)
+            mac, self._name = await validate_input(self.hass, user_input)
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -89,7 +92,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(mac)
             self._abort_if_unique_id_configured()
 
-            return self.async_create_entry(title=user_input[CONF_HOST], data=user_input)
+            return self.async_create_entry(title=self._name, data=user_input)
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors

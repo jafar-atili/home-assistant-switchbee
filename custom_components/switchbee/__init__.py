@@ -167,8 +167,6 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
             states = result[switchbee.ATTR_DATA]
             for state in states:
                 if state[switchbee.ATTR_ID] in self._devices:
-                    if state[switchbee.ATTR_ID] == 41:
-                        print(state)
                     self._devices[state[switchbee.ATTR_ID]]["state"] = state["state"]
                     self._devices[state[switchbee.ATTR_ID]][
                         "uid"

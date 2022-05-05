@@ -56,6 +56,7 @@ class Device(CoordinatorEntity, CoverEntity):
             manufacturer="SwitchBee",
             model=device["type"],
             name=self.name,
+            suggested_area=device["area"],
         )
         self._attr_current_cover_position = 0
         self._attr_is_closed = True

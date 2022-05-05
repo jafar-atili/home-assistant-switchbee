@@ -41,7 +41,8 @@ async def async_setup_entry(
     async_add_entities(
         Device(hass, coordinator.data[device], coordinator)
         for device in coordinator.data
-        if coordinator.data[device]["type"] == switchbee.TYPE_DIMMER
+        if coordinator.data[device]["type"]
+        in [switchbee.TYPE_DIMMER, switchbee.TYPE_SWITCH]
     )
 
 
@@ -55,17 +56,19 @@ class Device(CoordinatorEntity, LightEntity):
         self._attr_name = device["name"]
         self._device_id = device[switchbee.ATTR_ID]
         self._attr_unique_id = device["uid"]
+        self._is_dimmer = device["type"] == switchbee.TYPE_DIMMER
         self._attr_device_info = DeviceInfo(
             identifiers={
                 (DOMAIN, device["uid"]),
             },
             manufacturer="SwitchBee",
-            model="Dimmer",
+            model=(str(device["type"]).replace("_", " ")).title(),
             name=self.name,
+            suggested_area=device["area"],
         )
         self._attr_is_on = False
         self._attr_brightness = 0
-        self._attr_supported_features = SUPPORT_BRIGHTNESS
+        self._attr_supported_features = SUPPORT_BRIGHTNESS if self._is_dimmer else 0
         self._last_brightness = None
 
     @callback
