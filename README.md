@@ -1,9 +1,12 @@
 # SwitchBee Integration With Home Assistant
 
+![Build Status](https://img.shields.io/pypi/dm/pyswitchbee)
+
+
 Custom integrations to control the following SwitchBee devices via Home Assistans:
 
-- Lights (Dimmers)
-- Switches (Includes timer switch)
+- Lights (Dimmers and Switches)
+- Switches (Timer Switch)
 - Shutters 
 
 Supported devices will be discovered after the `SwitchBee` integration is configured
