@@ -1,5 +1,6 @@
 # SwitchBee Integration With Home Assistant
 
+![PyPI](https://img.shields.io/pypi/v/pyswitchbee?label=pypi%20package)
 ![Build Status](https://img.shields.io/pypi/dm/pyswitchbee)
 
 
