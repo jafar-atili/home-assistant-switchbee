@@ -3,6 +3,7 @@
 ![PyPI](https://img.shields.io/pypi/v/pyswitchbee?label=pypi%20package)
 ![Build Status](https://img.shields.io/pypi/dm/pyswitchbee)
 
+![alt text](https://brands.home-assistant.io/switchbee/logo@2x.png)
 
 Custom integrations to control the following SwitchBee devices via Home Assistans:
 

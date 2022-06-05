@@ -1,7 +1,8 @@
 """Support for SwitchBee scenario button."""
 import logging
 
-import switchbee
+from switchbee.device import DeviceType, ApiStateCommand
+from switchbee.api import SwitchBeeError
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -21,12 +22,9 @@ async def async_setup_entry(
     """Set up Switchbee button."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        Device(hass, coordinator.data[device], coordinator)
-        for device in coordinator.data
-        if coordinator.data[device]["type"]
-        in [
-            switchbee.TYPE_SCENARIO,
-        ]
+        Device(hass, device, coordinator)
+        for device in coordinator.data.values()
+        if device.type == DeviceType.Scenario
     )
 
 
@@ -37,25 +35,13 @@ class Device(CoordinatorEntity, ButtonEntity):
         """Initialize the Switchbee switch."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device["name"]
-        self._device_id = device[switchbee.ATTR_ID]
-        self._attr_unique_id = device["uid"]
+        self._attr_name = device.name
+        self._device_id = device.id
+        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
 
     async def async_press(self):
         """Fire the scenario in the SwitchBee hub."""
         try:
-            ret = await self.coordinator.api.set_state(
-                self._device_id, switchbee.STATE_ON
-            )
-        except switchbee.SwitchBeeError as exp:
+            await self.coordinator.api.set_state(self._device_id, ApiStateCommand.ON)
+        except SwitchBeeError as exp:
             _LOGGER.error("Failed to fire scenario %s, error: %s", self._attr_name, exp)
-        else:
-            if ret[switchbee.ATTR_STATUS] == switchbee.STATUS_OK:
-                self.coordinator.data[self._device_id][
-                    switchbee.ATTR_STATE
-                ] = switchbee.STATE_ON
-                self.coordinator.async_set_updated_data(self.coordinator.data)
-            else:
-                _LOGGER.error(
-                    "Failed to fire scenario %s: error: %s", self._attr_name, ret
-                )

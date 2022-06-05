@@ -2,7 +2,8 @@
 
 import logging
 
-import switchbee
+from switchbee.device import ApiStateCommand, DeviceType
+from switchbee.api import SwitchBeeError, ApiAttribute, ApiStatus
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -39,10 +40,13 @@ async def async_setup_entry(
     """Set up SwitchBee light."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        Device(hass, coordinator.data[device], coordinator)
-        for device in coordinator.data
-        if coordinator.data[device]["type"]
-        in [switchbee.TYPE_DIMMER, switchbee.TYPE_SWITCH]
+        Device(hass, device, coordinator)
+        for device in coordinator.data.values()
+        if device.type
+        in [
+            DeviceType.Dimmer,
+            DeviceType.Switch,
+        ]
     )
 
 
@@ -53,18 +57,18 @@ class Device(CoordinatorEntity, LightEntity):
         """Initialize the SwitchBee light."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device["name"]
-        self._device_id = device[switchbee.ATTR_ID]
-        self._attr_unique_id = device["uid"]
-        self._is_dimmer = device["type"] == switchbee.TYPE_DIMMER
+        self._attr_name = device.name
+        self._device_id = device.id
+        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
+        self._is_dimmer = device.type == DeviceType.Dimmer
         self._attr_device_info = DeviceInfo(
             identifiers={
-                (DOMAIN, device["uid"]),
+                (DOMAIN, self._attr_unique_id),
             },
             manufacturer="SwitchBee",
-            model=(str(device["type"]).replace("_", " ")).title(),
+            model=device.type.display,
             name=self.name,
-            suggested_area=device["area"],
+            suggested_area=device.zone,
         )
         self._attr_is_on = False
         self._attr_brightness = 0
@@ -74,22 +78,9 @@ class Device(CoordinatorEntity, LightEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        state = self.coordinator.data[self._device_id][switchbee.ATTR_STATE]
-        # the state can be one of the following:
-        #  OFF --> Means brightness is 0
-        #  ON --> Means Brightness is 100
-        #  Positive Integer --> current brightness
-        if isinstance(state, str):
-            if state == switchbee.STATE_OFF:
-                self._attr_is_on = False
-                self._attr_brightness = 0
+        if self._is_dimmer:
+            state = self.coordinator.data[self._device_id].brightness
 
-            else:
-                # ON
-                self._attr_is_on = True
-                self._attr_brightness = 100
-
-        elif isinstance(state, int):
             if state <= 2:
                 self._attr_is_on = False
             else:
@@ -97,6 +88,12 @@ class Device(CoordinatorEntity, LightEntity):
 
                 self._attr_brightness = brightness_switchbee_to_hass(state)
                 self._last_brightness = self._attr_brightness
+        else:
+            self._attr_is_on = (
+                True
+                if self.coordinator.data[self._device_id].state == ApiStateCommand.ON
+                else False
+            )
 
         super()._handle_coordinator_update()
 
@@ -118,19 +115,22 @@ class Device(CoordinatorEntity, LightEntity):
             # Set the last brightness we know
             if not self._last_brightness:
                 # First turn on, set the light brightness to the last brightness the HUB remembers
-                state = switchbee.STATE_ON
+                state = ApiStateCommand.ON
             else:
                 state = brightness_hass_to_switchbee(self._last_brightness)
 
         try:
             ret = await self.coordinator.api.set_state(self._device_id, state)
-        except switchbee.SwitchBeeError as exp:
+        except SwitchBeeError as exp:
             _LOGGER.error(
                 "Failed to set %s state %s, error: %s", self._attr_name, state, exp
             )
         else:
-            if ret[switchbee.ATTR_STATUS] == switchbee.STATUS_OK:
-                self.coordinator.data[self._device_id][switchbee.ATTR_STATE] = state
+            if ret[ApiAttribute.STATUS] == ApiStatus.OK:
+                if self._is_dimmer:
+                    self.coordinator.data[self._device_id].brightness = state
+                else:
+                    self.coordinator.data[self._device_id].state = state
                 if (
                     ATTR_BRIGHTNESS in kwargs
                     and brightness_hass_to_switchbee(kwargs[ATTR_BRIGHTNESS]) >= 2
@@ -144,20 +144,24 @@ class Device(CoordinatorEntity, LightEntity):
                     str(state),
                     ret,
                 )
+                self._async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         """Turn off SwitchBee light."""
         try:
             ret = await self.coordinator.api.set_state(
-                self._device_id, switchbee.STATE_OFF
+                self._device_id, ApiStateCommand.OFF
             )
-        except switchbee.SwitchBeeError as exp:
+        except SwitchBeeError as exp:
             _LOGGER.error("Failed to turn off %s, error: %s", self._attr_name, exp)
+            self._async_write_ha_state()
         else:
-            if ret[switchbee.ATTR_STATUS] == switchbee.STATUS_OK:
-                self.coordinator.data[self._device_id][
-                    switchbee.ATTR_STATE
-                ] = switchbee.STATE_OFF
+            if ret[ApiAttribute.STATUS] == ApiStatus.OK:
+                if self._is_dimmer:
+                    self.coordinator.data[self._device_id].brightness = 0
+                else:
+                    self.coordinator.data[self._device_id].state = ApiStateCommand.OFF
                 self.coordinator.async_set_updated_data(self.coordinator.data)
             else:
                 _LOGGER.error("Failed to turn off %s, error: %s", self._attr_name, ret)
+                self._async_write_ha_state()

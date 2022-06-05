@@ -1,7 +1,9 @@
 """Support for SwitchBee switch."""
 import logging
 
-import switchbee
+
+from switchbee.device import HardwareType, ApiStateCommand, DeviceType
+from switchbee.api import SwitchBeeError
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -21,14 +23,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up Switchbee switch."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
+
     async_add_entities(
-        Device(hass, coordinator.data[device], coordinator)
-        for device in coordinator.data
-        if coordinator.data[device]["type"]
-        in [
-            switchbee.TYPE_TIMED_POWER,
-            switchbee.TYPE_GROUP_SWITCH,
-        ]
+        Device(hass, device, coordinator)
+        for device in coordinator.data.values()
+        if device.type in [DeviceType.TimedPowerSwitch, DeviceType.GroupSwitch]
     )
 
 
@@ -39,17 +38,17 @@ class Device(CoordinatorEntity, SwitchEntity):
         """Initialize the Switchbee switch."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device["name"]
-        self._device_id = device[switchbee.ATTR_ID]
-        self._attr_unique_id = device["uid"]
-        if device[switchbee.ATTR_HARDWARE] != switchbee.HW_VIRTUAL:
+        self._attr_name = device.name
+        self._device_id = device.id
+        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
+        if device.hardware != HardwareType.Virtual:
             self._attr_device_info = DeviceInfo(
                 identifiers={
-                    (DOMAIN, device["uid"]),
+                    (DOMAIN, self._attr_unique_id),
                 },
                 manufacturer="SwitchBee",
-                model=(str(device["type"]).replace("_", " ")).title(),
-                suggested_area=device["area"],
+                model=device.type.display,
+                suggested_area=device.zone,
                 name=self.name,
             )
         self._attr_is_on = False
@@ -60,8 +59,7 @@ class Device(CoordinatorEntity, SwitchEntity):
         # timed power switch state will represent a number of minutes until it goes off
         # regulare switches state is ON/OFF
         self._attr_is_on = (
-            self.coordinator.data[self._device_id][switchbee.ATTR_STATE]
-            != switchbee.STATE_OFF
+            self.coordinator.data[self._device_id].state != ApiStateCommand.OFF
         )
 
         super()._handle_coordinator_update()
@@ -73,24 +71,19 @@ class Device(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Async function to set on to switch."""
-        return await self._async_set_state(switchbee.STATE_ON)
+        return await self._async_set_state(ApiStateCommand.ON)
 
     async def async_turn_off(self, **kwargs):
         """Async function to set off to switch."""
-        return await self._async_set_state(switchbee.STATE_OFF)
+        return await self._async_set_state(ApiStateCommand.OFF)
 
     async def _async_set_state(self, state):
         try:
-            ret = await self.coordinator.api.set_state(self._device_id, state)
-        except switchbee.SwitchBeeError as exp:
+            await self.coordinator.api.set_state(self._device_id, state)
+        except SwitchBeeError as exp:
             _LOGGER.error(
                 "Failed to set %s state %s, error: %s", self._attr_name, state, exp
             )
+            self._async_write_ha_state()
         else:
-            if ret[switchbee.ATTR_STATUS] == switchbee.STATUS_OK:
-                self.coordinator.data[self._device_id][switchbee.ATTR_STATE] = state
-                self.coordinator.async_set_updated_data(self.coordinator.data)
-            else:
-                _LOGGER.error(
-                    "Failed to set %s state %s: error: %s", self._attr_name, state, ret
-                )
+            await self.coordinator.async_refresh()

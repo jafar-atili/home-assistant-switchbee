@@ -1,9 +1,10 @@
 """Support for SwitchBee cover."""
 
 import logging
-import time
 
-import switchbee
+from asyncio import sleep
+from switchbee.device import SwitchBeeShutter, DeviceType
+from switchbee.api import SwitchBeeError, ApiStatus, ApiAttribute
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -22,10 +23,6 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-DEVICE_CLASS_MAP = {
-    "SHUTTER": CoverDeviceClass.SHUTTER,
-}
-
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -33,30 +30,30 @@ async def async_setup_entry(
     """Set up SwitchBee switch."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        Device(hass, coordinator.data[device], coordinator)
-        for device in coordinator.data
-        if coordinator.data[device]["type"] == switchbee.TYPE_SHUTTER
+        Device(hass, device, coordinator)
+        for device in coordinator.data.values()
+        if device.type == DeviceType.Shutter
     )
 
 
 class Device(CoordinatorEntity, CoverEntity):
     """Representation of an SwitchBee cover."""
 
-    def __init__(self, hass, device, coordinator):
+    def __init__(self, hass, device: SwitchBeeShutter, coordinator):
         """Initialize the SwitchBee cover."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device["name"]
-        self._attr_unique_id = device["uid"]
-        self._device_id = device[switchbee.ATTR_ID]
+        self._attr_name = device.name
+        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
+        self._device_id = device.id
         self._attr_device_info = DeviceInfo(
             identifiers={
-                (DOMAIN, device["uid"]),
+                (DOMAIN, self._attr_unique_id),
             },
             manufacturer="SwitchBee",
-            model=device["type"],
+            model=device.type.display,
             name=self.name,
-            suggested_area=device["area"],
+            suggested_area=device.zone,
         )
         self._attr_current_cover_position = 0
         self._attr_is_closed = True
@@ -66,16 +63,14 @@ class Device(CoordinatorEntity, CoverEntity):
             | CoverEntityFeature.SET_POSITION
             | CoverEntityFeature.STOP
         )
-        self._attr_device_class = DEVICE_CLASS_MAP[device["type"]]
+        self._attr_device_class = CoverDeviceClass.SHUTTER
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        position = self.coordinator.data[self._device_id][switchbee.ATTR_STATE]
-        if isinstance(position, str) and position == switchbee.STATE_OFF:
-            self._attr_current_cover_position = 0
-        elif isinstance(position, int):
-            self._attr_current_cover_position = position
+        self._attr_current_cover_position = self.coordinator.data[
+            self._device_id
+        ].position
 
         if self._attr_current_cover_position == 0:
             self._attr_is_closed = True
@@ -104,12 +99,13 @@ class Device(CoordinatorEntity, CoverEntity):
         """Set the cover position in HAAS based on the central unit."""
         try:
             curr_pos = await self.coordinator.api.get_state(self._device_id)
-            curr_pos = curr_pos[switchbee.ATTR_DATA]
-        except switchbee.SwitchBeeError as exp:
+            curr_pos = curr_pos["data"]
+        except SwitchBeeError as exp:
             _LOGGER.error("Failed to get %s position, error: %s", self._attr_name, exp)
+            self._async_write_ha_state()
             return -1
         else:
-            self.coordinator.data[self._device_id][switchbee.ATTR_STATE] = curr_pos
+            self.coordinator.data[self._device_id].position = curr_pos
             self.coordinator.async_set_updated_data(self.coordinator.data)
 
     async def async_stop_cover(self, **kwargs):
@@ -119,7 +115,7 @@ class Device(CoordinatorEntity, CoverEntity):
             position=self.current_cover_position, force=True
         )
         # wait 2 seconds and update the current position in the entity
-        time.sleep(2)
+        await sleep(2)
         await self._update_cover_position_from_central_unit()
 
     async def async_set_cover_position(self, **kwargs):
@@ -133,19 +129,18 @@ class Device(CoordinatorEntity, CoverEntity):
             ret = await self.coordinator.api.set_state(
                 self._device_id, kwargs[ATTR_POSITION]
             )
-        except switchbee.SwitchBeeError as exp:
+        except SwitchBeeError as exp:
             _LOGGER.error(
                 "Failed to set %s position to %s, error: %s",
                 self._attr_name,
                 str(kwargs[ATTR_POSITION]),
                 exp,
             )
+            self._async_write_ha_state()
 
         else:
-            if ret[switchbee.ATTR_STATUS] == switchbee.STATUS_OK:
-                self.coordinator.data[self._device_id][switchbee.ATTR_STATE] = kwargs[
-                    ATTR_POSITION
-                ]
+            if ret[ApiAttribute.STATUS] == ApiStatus.OK:
+                self.coordinator.data[self._device_id].position = kwargs[ATTR_POSITION]
                 self.coordinator.async_set_updated_data(self.coordinator.data)
             else:
                 _LOGGER.error(
@@ -154,3 +149,4 @@ class Device(CoordinatorEntity, CoverEntity):
                     str(kwargs[ATTR_POSITION]),
                     ret,
                 )
+                self._async_write_ha_state()
