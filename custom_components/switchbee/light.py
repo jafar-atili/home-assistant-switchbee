@@ -74,11 +74,23 @@ class Device(CoordinatorEntity, LightEntity):
         self._attr_brightness = 0
         self._attr_supported_features = SUPPORT_BRIGHTNESS if self._is_dimmer else 0
         self._last_brightness = None
+        self.dev_availble = False
+
+    @property
+    def available(self) -> bool:
+        """Available."""
+        return self.dev_availble
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+
         if self._is_dimmer:
+            if self.coordinator.data[self._device_id].brightness == -1:
+                self.dev_availble = False
+                return None
+
+            self.dev_availble = True
             state = self.coordinator.data[self._device_id].brightness
 
             if state <= 2:
@@ -89,6 +101,11 @@ class Device(CoordinatorEntity, LightEntity):
                 self._attr_brightness = brightness_switchbee_to_hass(state)
                 self._last_brightness = self._attr_brightness
         else:
+            if self.coordinator.data[self._device_id].state == -1:
+                self.dev_availble = False
+                return None
+
+            self.dev_availble = True
             self._attr_is_on = (
                 True
                 if self.coordinator.data[self._device_id].state == ApiStateCommand.ON
@@ -125,6 +142,8 @@ class Device(CoordinatorEntity, LightEntity):
             _LOGGER.error(
                 "Failed to set %s state %s, error: %s", self._attr_name, state, exp
             )
+            self._attr_is_on = False
+            self._async_write_ha_state()
         else:
             if ret[ApiAttribute.STATUS] == ApiStatus.OK:
                 if self._is_dimmer:
@@ -144,6 +163,7 @@ class Device(CoordinatorEntity, LightEntity):
                     str(state),
                     ret,
                 )
+                self._attr_is_on = False
                 self._async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
@@ -154,6 +174,7 @@ class Device(CoordinatorEntity, LightEntity):
             )
         except SwitchBeeError as exp:
             _LOGGER.error("Failed to turn off %s, error: %s", self._attr_name, exp)
+            self._attr_is_on = True
             self._async_write_ha_state()
         else:
             if ret[ApiAttribute.STATUS] == ApiStatus.OK:
@@ -164,4 +185,5 @@ class Device(CoordinatorEntity, LightEntity):
                 self.coordinator.async_set_updated_data(self.coordinator.data)
             else:
                 _LOGGER.error("Failed to turn off %s, error: %s", self._attr_name, ret)
+                self._attr_is_on = True
                 self._async_write_ha_state()

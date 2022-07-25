@@ -1,9 +1,8 @@
 """Support for SwitchBee switch."""
 import logging
 
-
-from switchbee.device import HardwareType, ApiStateCommand, DeviceType
 from switchbee.api import SwitchBeeError
+from switchbee.device import ApiStateCommand, DeviceType, HardwareType
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -52,10 +51,23 @@ class Device(CoordinatorEntity, SwitchEntity):
                 name=self.name,
             )
         self._attr_is_on = False
+        self.dev_availble = False
+
+    @property
+    def available(self) -> bool:
+        """Available."""
+        return self.dev_availble
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+
+        if self.coordinator.data[self._device_id].state == -1:
+            self.dev_availble = False
+            return None
+
+        self.dev_availble = True
+
         # timed power switch state will represent a number of minutes until it goes off
         # regulare switches state is ON/OFF
         self._attr_is_on = (

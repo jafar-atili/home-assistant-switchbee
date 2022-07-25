@@ -4,7 +4,7 @@ import logging
 
 from asyncio import sleep
 from switchbee.device import SwitchBeeShutter, DeviceType
-from switchbee.api import SwitchBeeError, ApiStatus, ApiAttribute
+from switchbee.api import SwitchBeeError, ApiStatus, ApiAttribute, SwitchBeeTokenError
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -63,11 +63,23 @@ class Device(CoordinatorEntity, CoverEntity):
             | CoverEntityFeature.SET_POSITION
             | CoverEntityFeature.STOP
         )
+        self._attr_assumed_state = False
         self._attr_device_class = CoverDeviceClass.SHUTTER
+        self.dev_availble = False
+
+    @property
+    def available(self) -> bool:
+        """Available."""
+        return self.dev_availble
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        if int(self.coordinator.data[self._device_id].position) == -1:
+            self.dev_availble = False
+            return None
+
+        self.dev_availble = True
         self._attr_current_cover_position = self.coordinator.data[
             self._device_id
         ].position
@@ -102,7 +114,7 @@ class Device(CoordinatorEntity, CoverEntity):
             curr_pos = curr_pos["data"]
         except SwitchBeeError as exp:
             _LOGGER.error("Failed to get %s position, error: %s", self._attr_name, exp)
-            self._async_write_ha_state()
+            self.async_write_ha_state()
             return -1
         else:
             self.coordinator.data[self._device_id].position = curr_pos
@@ -120,33 +132,26 @@ class Device(CoordinatorEntity, CoverEntity):
 
     async def async_set_cover_position(self, **kwargs):
         """Async function to set position to cover."""
+        last_position = self._attr_current_cover_position
         if (
             self._attr_current_cover_position == kwargs[ATTR_POSITION]
             and "force" not in kwargs
         ):
             return
         try:
-            ret = await self.coordinator.api.set_state(
-                self._device_id, kwargs[ATTR_POSITION]
-            )
-        except SwitchBeeError as exp:
+            await self.coordinator.api.set_state(self._device_id, kwargs[ATTR_POSITION])
+        except (SwitchBeeError, SwitchBeeTokenError) as exp:
             _LOGGER.error(
                 "Failed to set %s position to %s, error: %s",
                 self._attr_name,
                 str(kwargs[ATTR_POSITION]),
                 exp,
             )
-            self._async_write_ha_state()
+            self._attr_current_cover_position = last_position
+            _LOGGER.info("Restoring to %i", last_position)
+            self.async_write_ha_state()
+            return
 
-        else:
-            if ret[ApiAttribute.STATUS] == ApiStatus.OK:
-                self.coordinator.data[self._device_id].position = kwargs[ATTR_POSITION]
-                self.coordinator.async_set_updated_data(self.coordinator.data)
-            else:
-                _LOGGER.error(
-                    "Failed to set %s position to %s, error: %s",
-                    self._attr_name,
-                    str(kwargs[ATTR_POSITION]),
-                    ret,
-                )
-                self._async_write_ha_state()
+        self.coordinator.data[self._device_id].position = kwargs[ATTR_POSITION]
+        self.coordinator.async_set_updated_data(self.coordinator.data)
+        self.async_write_ha_state()
