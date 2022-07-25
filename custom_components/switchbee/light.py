@@ -1,9 +1,13 @@
 """Support for SwitchBee light."""
 
 import logging
-
 from switchbee.device import ApiStateCommand, DeviceType
-from switchbee.api import SwitchBeeError, ApiAttribute, ApiStatus
+from switchbee.api import (
+    SwitchBeeError,
+    ApiAttribute,
+    ApiStatus,
+    SwitchBeeDeviceOfflineError,
+)
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -74,25 +78,51 @@ class Device(CoordinatorEntity, LightEntity):
         self._attr_brightness = 0
         self._attr_supported_features = SUPPORT_BRIGHTNESS if self._is_dimmer else 0
         self._last_brightness = None
-        self.dev_availble = False
+        self._attr_available = True
+        self._attr_assumed_state = False
 
     @property
     def available(self) -> bool:
-        """Available."""
-        return self.dev_availble
+        return self._attr_available
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
 
+        async def async_refresh_state():
+            try:
+                await self.coordinator.api.set_state(self._device_id, "dummy")
+            except SwitchBeeDeviceOfflineError:
+                return
+            except SwitchBeeError:
+                return
+
         if self._is_dimmer:
-            if self.coordinator.data[self._device_id].brightness == -1:
-                self.dev_availble = False
-                return None
-
-            self.dev_availble = True
             state = self.coordinator.data[self._device_id].brightness
+        else:
+            state = self.coordinator.data[self._device_id].state
 
+        if state == -1:
+            # This specific call will refresh the state of the device in the CU
+            self.hass.async_create_task(async_refresh_state())
+
+            if self.available:
+                _LOGGER.error(
+                    "%s light is not responding, check the status in the SwitchBee mobile app",
+                    self.name,
+                )
+            self._attr_available = False
+            self.async_write_ha_state()
+            return None
+        else:
+            if not self.available:
+                _LOGGER.info(
+                    "%s light is now responding",
+                    self.name,
+                )
+            self._attr_available = True
+
+        if self._is_dimmer:
             if state <= 2:
                 self._attr_is_on = False
             else:
@@ -101,16 +131,7 @@ class Device(CoordinatorEntity, LightEntity):
                 self._attr_brightness = brightness_switchbee_to_hass(state)
                 self._last_brightness = self._attr_brightness
         else:
-            if self.coordinator.data[self._device_id].state == -1:
-                self.dev_availble = False
-                return None
-
-            self.dev_availble = True
-            self._attr_is_on = (
-                True
-                if self.coordinator.data[self._device_id].state == ApiStateCommand.ON
-                else False
-            )
+            self._attr_is_on = True if state == ApiStateCommand.ON else False
 
         super()._handle_coordinator_update()
 
@@ -138,7 +159,7 @@ class Device(CoordinatorEntity, LightEntity):
 
         try:
             ret = await self.coordinator.api.set_state(self._device_id, state)
-        except SwitchBeeError as exp:
+        except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             _LOGGER.error(
                 "Failed to set %s state %s, error: %s", self._attr_name, state, exp
             )
@@ -172,7 +193,7 @@ class Device(CoordinatorEntity, LightEntity):
             ret = await self.coordinator.api.set_state(
                 self._device_id, ApiStateCommand.OFF
             )
-        except SwitchBeeError as exp:
+        except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             _LOGGER.error("Failed to turn off %s, error: %s", self._attr_name, exp)
             self._attr_is_on = True
             self._async_write_ha_state()

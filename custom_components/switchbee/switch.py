@@ -1,7 +1,7 @@
 """Support for SwitchBee switch."""
 import logging
 
-from switchbee.api import SwitchBeeError
+from switchbee.api import SwitchBeeError, SwitchBeeDeviceOfflineError
 from switchbee.device import ApiStateCommand, DeviceType, HardwareType
 
 from homeassistant.components.switch import SwitchEntity
@@ -51,22 +51,45 @@ class Device(CoordinatorEntity, SwitchEntity):
                 name=self.name,
             )
         self._attr_is_on = False
-        self.dev_availble = False
+        self._attr_available = True
 
     @property
     def available(self) -> bool:
         """Available."""
-        return self.dev_availble
+        return self._attr_available
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
 
-        if self.coordinator.data[self._device_id].state == -1:
-            self.dev_availble = False
-            return None
+        async def async_refresh_state():
 
-        self.dev_availble = True
+            try:
+                await self.coordinator.api.set_state(self._device_id, "dummy")
+            except SwitchBeeDeviceOfflineError:
+                return
+            except SwitchBeeError:
+                return
+
+        if self.coordinator.data[self._device_id].state == -1:
+            # This specific call will refresh the state of the device in the CU
+            self.hass.async_create_task(async_refresh_state())
+
+            if self.available:
+                _LOGGER.error(
+                    "%s switch is not responding, check the status in the SwitchBee mobile app",
+                    self.name,
+                )
+            self._attr_available = False
+            self.async_write_ha_state()
+            return None
+        else:
+            if not self.available:
+                _LOGGER.info(
+                    "%s switch is now responding",
+                    self.name,
+                )
+            self._attr_available = True
 
         # timed power switch state will represent a number of minutes until it goes off
         # regulare switches state is ON/OFF
@@ -92,7 +115,7 @@ class Device(CoordinatorEntity, SwitchEntity):
     async def _async_set_state(self, state):
         try:
             await self.coordinator.api.set_state(self._device_id, state)
-        except SwitchBeeError as exp:
+        except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             _LOGGER.error(
                 "Failed to set %s state %s, error: %s", self._attr_name, state, exp
             )

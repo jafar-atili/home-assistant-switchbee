@@ -4,7 +4,11 @@ import logging
 
 from asyncio import sleep
 from switchbee.device import SwitchBeeShutter, DeviceType
-from switchbee.api import SwitchBeeError, ApiStatus, ApiAttribute, SwitchBeeTokenError
+from switchbee.api import (
+    SwitchBeeError,
+    SwitchBeeTokenError,
+    SwitchBeeDeviceOfflineError,
+)
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -65,21 +69,39 @@ class Device(CoordinatorEntity, CoverEntity):
         )
         self._attr_assumed_state = False
         self._attr_device_class = CoverDeviceClass.SHUTTER
-        self.dev_availble = False
+        self._attr_available = True
 
     @property
     def available(self) -> bool:
-        """Available."""
-        return self.dev_availble
+        return self._attr_available
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+
+        async def async_refresh_state():
+            try:
+                await self.coordinator.api.set_state(self._device_id, "dummy")
+            except SwitchBeeDeviceOfflineError:
+                return
+            except SwitchBeeError:
+                return
+
         if int(self.coordinator.data[self._device_id].position) == -1:
-            self.dev_availble = False
+            self.hass.async_create_task(async_refresh_state())
+            if self.available:
+                _LOGGER.error(
+                    "%s shutter is not responding, check the status in the SwitchBee mobile app",
+                    self.name,
+                )
+            self._attr_available = False
+            self.async_write_ha_state()
             return None
 
-        self.dev_availble = True
+        if not self.available:
+            _LOGGER.info("%s shutter is now responding", self.name)
+            self._attr_available = True
+
         self._attr_current_cover_position = self.coordinator.data[
             self._device_id
         ].position
@@ -112,7 +134,7 @@ class Device(CoordinatorEntity, CoverEntity):
         try:
             curr_pos = await self.coordinator.api.get_state(self._device_id)
             curr_pos = curr_pos["data"]
-        except SwitchBeeError as exp:
+        except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
             _LOGGER.error("Failed to get %s position, error: %s", self._attr_name, exp)
             self.async_write_ha_state()
             return -1
