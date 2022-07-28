@@ -107,6 +107,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
         return self._api
 
     async def _async_update_data(self):
+
         if self._reconnect_counts != self._api.reconnect_count:
             self._reconnect_counts = self._api.reconnect_count
             _LOGGER.debug(
