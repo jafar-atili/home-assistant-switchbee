@@ -19,6 +19,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.device_registry import format_mac
 
 from .const import (
     CONF_EXPOSE_GROUP_SWITCHES,
@@ -94,6 +95,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
         self._prev_expose_group_switches: bool = False
         self._expose_scenarios: bool = expose_scenarios
         self._prev_expose_scenarios: bool = False
+        self._mac_addr_fmt = format_mac(swb_api.mac)
         super().__init__(
             hass,
             _LOGGER,
@@ -105,6 +107,11 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
     def api(self) -> CentralUnitAPI:
         """Return SwitchBee API object."""
         return self._api
+
+    @property
+    def mac_formated(self) -> str:
+        """Return SwitchBee API object."""
+        return self._mac_addr_fmt
 
     async def _async_update_data(self):
 

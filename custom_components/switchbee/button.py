@@ -35,11 +35,11 @@ class Device(CoordinatorEntity, ButtonEntity):
         """Initialize the Switchbee switch."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device.name
+        self._attr_name = f"{device.zone} {device.name}"
         self._device_id = device.id
-        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
+        self._attr_unique_id = f"{coordinator.mac_formated}-{device.id}"
 
-    async def async_press(self):
+    async def async_press(self) -> None:
         """Fire the scenario in the SwitchBee hub."""
         try:
             await self.coordinator.api.set_state(self._device_id, ApiStateCommand.ON)

@@ -17,11 +17,10 @@ from homeassistant.components.light import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_SWITCHES_AS_LIGHTS, DOMAIN
 
 MAX_BRIGHTNESS = 255
 
@@ -43,14 +42,19 @@ async def async_setup_entry(
 ) -> None:
     """Set up SwitchBee light."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    switch_as_light = entry.data[CONF_SWITCHES_AS_LIGHTS]
+    print(switch_as_light)
+
+    device_types = (
+        [DeviceType.Dimmer, DeviceType.Switch]
+        if switch_as_light
+        else [DeviceType.Dimmer]
+    )
+
     async_add_entities(
         Device(hass, device, coordinator)
         for device in coordinator.data.values()
-        if device.type
-        in [
-            DeviceType.Dimmer,
-            DeviceType.Switch,
-        ]
+        if device.type in device_types
     )
 
 
@@ -61,25 +65,16 @@ class Device(CoordinatorEntity, LightEntity):
         """Initialize the SwitchBee light."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = device.name
+        self._attr_name = f"{device.zone} {device.name}"
         self._device_id = device.id
-        self._attr_unique_id = f"{self.coordinator.api.mac}-{device.id}"
+        self._attr_unique_id = f"{coordinator.mac_formated}-{device.id}"
         self._is_dimmer = device.type == DeviceType.Dimmer
-        self._attr_device_info = DeviceInfo(
-            identifiers={
-                (DOMAIN, self._attr_unique_id),
-            },
-            manufacturer="SwitchBee",
-            model=device.type.display,
-            name=self.name,
-            suggested_area=device.zone,
-        )
         self._attr_is_on = False
         self._attr_brightness = 0
         self._attr_supported_features = SUPPORT_BRIGHTNESS if self._is_dimmer else 0
         self._last_brightness = None
         self._attr_available = True
-        self._attr_assumed_state = False
+        self._attr_has_entity_name = True
 
     @property
     def available(self) -> bool:
