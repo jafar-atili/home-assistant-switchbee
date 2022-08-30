@@ -188,7 +188,6 @@ class Device(CoordinatorEntity, ClimateEntity):
 
     async def operate(self, state: dict[str, str | int]):
         """send request to central unit."""
-        _LOGGER.warning("Sending the central unit %s", state)
         try:
             await self.coordinator.api.set_state(self._device_id, state)
         except (SwitchBeeError, SwitchBeeDeviceOfflineError) as exp:
