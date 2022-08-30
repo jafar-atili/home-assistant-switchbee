@@ -129,6 +129,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
             DeviceType.TimedPowerSwitch,
             DeviceType.Shutter,
             DeviceType.Thermostat,
+            DeviceType.TimedSwitch,
         ]
 
         config_changed = False
