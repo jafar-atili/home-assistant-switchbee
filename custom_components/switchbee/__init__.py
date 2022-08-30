@@ -36,6 +36,7 @@ PLATFORMS: list[Platform] = [
     Platform.COVER,
     Platform.LIGHT,
     Platform.BUTTON,
+    Platform.CLIMATE,
 ]
 
 
@@ -127,6 +128,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
             DeviceType.Dimmer,
             DeviceType.TimedPowerSwitch,
             DeviceType.Shutter,
+            DeviceType.Thermostat,
         ]
 
         config_changed = False
@@ -144,6 +146,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator):
 
         if self._expose_scenarios:
             include_devices.append(DeviceType.Scenario)
+            include_devices.append(DeviceType.RollingScenario)
 
         # The devices are loaded once during the config_entry
         if not self._api.devices or config_changed:

@@ -1,6 +1,7 @@
 """Support for SwitchBee light."""
 
 import logging
+from typing import Any
 from switchbee.device import ApiStateCommand, DeviceType
 from switchbee.api import (
     SwitchBeeError,
@@ -43,7 +44,6 @@ async def async_setup_entry(
     """Set up SwitchBee light."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     switch_as_light = entry.data[CONF_SWITCHES_AS_LIGHTS]
-    print(switch_as_light)
 
     device_types = (
         [DeviceType.Dimmer, DeviceType.Switch]
@@ -135,7 +135,7 @@ class Device(CoordinatorEntity, LightEntity):
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Async function to set on to light."""
 
         if ATTR_BRIGHTNESS in kwargs:
@@ -182,7 +182,7 @@ class Device(CoordinatorEntity, LightEntity):
                 self._attr_is_on = False
                 self._async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off SwitchBee light."""
         try:
             ret = await self.coordinator.api.set_state(
