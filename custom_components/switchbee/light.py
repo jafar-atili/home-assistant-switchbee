@@ -46,7 +46,7 @@ async def async_setup_entry(
     switch_as_light = entry.data[CONF_SWITCHES_AS_LIGHTS]
 
     device_types = (
-        [DeviceType.Dimmer, DeviceType.Switch]
+        [DeviceType.Dimmer, DeviceType.Switch, DeviceType.TimedSwitch]
         if switch_as_light
         else [DeviceType.Dimmer]
     )

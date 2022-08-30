@@ -23,11 +23,15 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
     switch_as_light = entry.data[CONF_SWITCHES_AS_LIGHTS]
-    print(switch_as_light)
     device_types = (
-        [DeviceType.TimedPowerSwitch, DeviceType.GroupSwitch]
+        [DeviceType.TimedPowerSwitch, DeviceType.GroupSwitch, DeviceType.TimedSwitch]
         if switch_as_light
-        else [DeviceType.TimedPowerSwitch, DeviceType.GroupSwitch, DeviceType.Switch]
+        else [
+            DeviceType.TimedPowerSwitch,
+            DeviceType.GroupSwitch,
+            DeviceType.Switch,
+            DeviceType.TimedSwitch,
+        ]
     )
 
     async_add_entities(
