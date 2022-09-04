@@ -1,7 +1,8 @@
 """Support for SwitchBee switch."""
 import logging
+from typing import Any
 
-from switchbee.api import SwitchBeeError, SwitchBeeDeviceOfflineError
+from switchbee.api import SwitchBeeDeviceOfflineError, SwitchBeeError
 from switchbee.device import ApiStateCommand, DeviceType
 
 from homeassistant.components.switch import SwitchEntity
@@ -11,7 +12,8 @@ from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_SWITCHES_AS_LIGHTS
+from . import SwitchBeeCoordinator
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -20,17 +22,16 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Switchbee switch."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-
-    switch_as_light = entry.data[CONF_SWITCHES_AS_LIGHTS]
+    coordinator: SwitchBeeCoordinator = hass.data[DOMAIN][entry.entry_id]
     device_types = (
         [DeviceType.TimedPowerSwitch]
-        if switch_as_light
+        if coordinator.switch_as_light
         else [
             DeviceType.TimedPowerSwitch,
             DeviceType.GroupSwitch,
             DeviceType.Switch,
             DeviceType.TimedSwitch,
+            DeviceType.TwoWay,
         ]
     )
 
@@ -85,13 +86,13 @@ class Device(CoordinatorEntity, SwitchEntity):
             self._attr_available = False
             self.async_write_ha_state()
             return None
-        else:
-            if not self.available:
-                _LOGGER.info(
-                    "%s switch is now responding",
-                    self.name,
-                )
-            self._attr_available = True
+
+        if not self.available:
+            _LOGGER.info(
+                "%s switch is now responding",
+                self.name,
+            )
+        self._attr_available = True
 
         # timed power switch state will represent a number of minutes until it goes off
         # regulare switches state is ON/OFF
@@ -106,11 +107,11 @@ class Device(CoordinatorEntity, SwitchEntity):
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Async function to set on to switch."""
         return await self._async_set_state(ApiStateCommand.ON)
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Async function to set off to switch."""
         return await self._async_set_state(ApiStateCommand.OFF)
 

@@ -7,9 +7,7 @@
         "data": {
           "host": "[%key:common::config_flow::data::host%]",
           "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]",
-          "switches_as_lights": "[%key:common::config_flow::data::switches_as_lights%]"
-
+          "password": "[%key:common::config_flow::data::password%]"
         }
       }
     },
@@ -27,8 +25,7 @@
       "init": {
         "data": {
           "scan_interval": "Polling interval in seconds",
-          "expose_group_switches": "Expose Group Scenarios as Switch entity",
-          "expose_scenarios": "Expose Scenarios as Button entity "
+          "devices": "Devices to include"
         }
       }
     }

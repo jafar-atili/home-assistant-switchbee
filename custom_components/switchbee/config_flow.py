@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from switchbee.api import SwitchBeeError, CentralUnitAPI
+from switchbee.api import CentralUnitAPI, SwitchBeeError
+from switchbee.device import DeviceType
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -22,8 +23,8 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.device_registry import format_mac
 
 from .const import (
-    CONF_EXPOSE_GROUP_SWITCHES,
-    CONF_EXPOSE_SCENARIOS,
+    CONF_DEFUALT_ALLOWED,
+    CONF_DEVICES,
     CONF_SWITCHES_AS_LIGHTS,
     DOMAIN,
     SCAN_INTERVAL_SEC,
@@ -36,7 +37,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): cv.string,
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
-        vol.Required(CONF_SWITCHES_AS_LIGHTS, default=True): cv.boolean,
+        vol.Required(CONF_SWITCHES_AS_LIGHTS, default=False): cv.boolean,
     }
 )
 
@@ -67,7 +68,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Show the setup form to the user."""
-        errors = {}
+        errors: dict[str, str] = {}
 
         if user_input is None:
             return self.async_show_form(
@@ -111,30 +112,38 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None) -> FlowResult:
         """Handle options flow."""
+
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_SCAN_INTERVAL,
-                    default=self.config_entry.options.get(
-                        CONF_SCAN_INTERVAL, SCAN_INTERVAL_SEC
-                    ),
-                ): cv.positive_int,
-                vol.Required(
-                    CONF_EXPOSE_SCENARIOS,
-                    default=self.config_entry.options.get(CONF_EXPOSE_SCENARIOS, False),
-                ): cv.boolean,
-                vol.Required(
-                    CONF_EXPOSE_GROUP_SWITCHES,
-                    default=self.config_entry.options.get(
-                        CONF_EXPOSE_GROUP_SWITCHES, False
-                    ),
-                ): cv.boolean,
-            }
-        )
-        return self.async_show_form(step_id="init", data_schema=data_schema)
+        all_devices = [
+            DeviceType.Switch,
+            DeviceType.TimedSwitch,
+            DeviceType.GroupSwitch,
+            DeviceType.TimedPowerSwitch,
+            DeviceType.Dimmer,
+            DeviceType.Scenario,
+            DeviceType.Thermostat,
+            DeviceType.Shutter,
+        ]
+
+        data_schema = {
+            vol.Required(
+                CONF_SCAN_INTERVAL,
+                default=self.config_entry.options.get(
+                    CONF_SCAN_INTERVAL, SCAN_INTERVAL_SEC
+                ),
+            ): cv.positive_int,
+            vol.Required(
+                CONF_DEVICES,
+                default=self.config_entry.options.get(
+                    CONF_DEVICES,
+                    CONF_DEFUALT_ALLOWED,
+                ),
+            ): cv.multi_select([device.display for device in all_devices]),
+        }
+
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(data_schema))
 
 
 class CannotConnect(HomeAssistantError):

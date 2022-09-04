@@ -13,7 +13,7 @@
           "user": {
               "data": {
                   "host": "Central Unit IP address",
-                  "username": "User",
+                  "username": "User (e-mail)",
                   "password": "Password",
                   "switch_as_light": "Initialize switches as light entities"
               },
@@ -26,8 +26,7 @@
         "init": {
           "data": {
             "scan_interval": "Polling interval in seconds",
-            "expose_group_switches": "Expose Group Scenarios as Switch entity",
-            "expose_scenarios": "Expose Scenarios as Button entity "
+            "devices": "Devices to include"
           }
         }
       }
