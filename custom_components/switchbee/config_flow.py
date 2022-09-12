@@ -114,6 +114,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             DeviceType.Scenario,
             DeviceType.Thermostat,
             DeviceType.Shutter,
+            DeviceType.Somfy,
         ]
 
         data_schema = {

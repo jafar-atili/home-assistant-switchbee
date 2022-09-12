@@ -1,14 +1,18 @@
 """Support for SwitchBee cover."""
 
+from __future__ import annotations
 import logging
 
 from asyncio import sleep
+from typing import Any, Union
 from switchbee.device import SwitchBeeShutter, DeviceType
 from switchbee.api import (
     SwitchBeeError,
     SwitchBeeTokenError,
     SwitchBeeDeviceOfflineError,
 )
+
+from switchbee.const import SomfyCommand
 
 from switchbee import SWITCHBEE_BRAND
 
@@ -38,7 +42,7 @@ async def async_setup_entry(
     async_add_entities(
         Device(hass, device, coordinator)
         for device in coordinator.data.values()
-        if device.type == DeviceType.Shutter
+        if device.type in [DeviceType.Shutter, DeviceType.Somfy]
     )
 
 
@@ -54,12 +58,21 @@ class Device(CoordinatorEntity, CoverEntity):
         self._device_id = device.id
         self._attr_current_cover_position = 0
         self._attr_is_closed = True
-        self._attr_supported_features = (
-            CoverEntityFeature.CLOSE
-            | CoverEntityFeature.OPEN
-            | CoverEntityFeature.SET_POSITION
-            | CoverEntityFeature.STOP
-        )
+        self._device = device
+
+        if self._device.type == DeviceType.Somfy:
+            self._attr_supported_features = (
+                CoverEntityFeature.CLOSE
+                | CoverEntityFeature.OPEN
+                | CoverEntityFeature.STOP
+            )
+        else:
+            self._attr_supported_features = (
+                CoverEntityFeature.CLOSE
+                | CoverEntityFeature.OPEN
+                | CoverEntityFeature.SET_POSITION
+                | CoverEntityFeature.STOP
+            )
         self._attr_assumed_state = False
         self._attr_device_class = CoverDeviceClass.SHUTTER
         self._attr_available = True
@@ -71,7 +84,10 @@ class Device(CoordinatorEntity, CoverEntity):
         return self._attr_available
 
     @property
-    def device_info(self) -> DeviceInfo:
+    def device_info(self) -> DeviceInfo | None:
+        if self._device.type == DeviceType.Somfy:
+            return None
+
         return DeviceInfo(
             name=f"SwitchBee_{str(self._device.unit_id)}",
             identifiers={
@@ -100,6 +116,9 @@ class Device(CoordinatorEntity, CoverEntity):
                 return
             except SwitchBeeError:
                 return
+
+        if self._device.type == DeviceType.Somfy:
+            return
 
         if int(self.coordinator.data[self._device_id].position) == -1:
             self.hass.async_create_task(async_refresh_state())
@@ -131,14 +150,22 @@ class Device(CoordinatorEntity, CoverEntity):
         await super().async_added_to_hass()
         self._handle_coordinator_update()
 
-    async def async_open_cover(self, **kwargs):
+    async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
+
+        if self._device.type == DeviceType.Somfy:
+            return await self.send_somfy_command(SomfyCommand.UP)
+
         if self._attr_current_cover_position == 100:
             return
         await self.async_set_cover_position(position=100)
 
-    async def async_close_cover(self, **kwargs):
+    async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
+
+        if self._device.type == DeviceType.Somfy:
+            return await self.send_somfy_command(SomfyCommand.DOWN)
+
         if self._attr_current_cover_position == 0:
             return
         await self.async_set_cover_position(position=0)
@@ -156,8 +183,12 @@ class Device(CoordinatorEntity, CoverEntity):
             self.coordinator.data[self._device_id].position = curr_pos
             self.coordinator.async_set_updated_data(self.coordinator.data)
 
-    async def async_stop_cover(self, **kwargs):
+    async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop a moving cover."""
+
+        if self._device.type == DeviceType.Somfy:
+            return await self.send_somfy_command(SomfyCommand.MY)
+
         # to stop the shutter, we just interrupt it with any state during operation
         await self.async_set_cover_position(
             position=self.current_cover_position, force=True
@@ -166,7 +197,22 @@ class Device(CoordinatorEntity, CoverEntity):
         await sleep(2)
         await self._update_cover_position_from_central_unit()
 
-    async def async_set_cover_position(self, **kwargs):
+    async def send_somfy_command(self, command: str) -> None:
+        """Async function to send somfy command."""
+        try:
+            await self.coordinator.api.set_state(self._device_id, command)
+        except (SwitchBeeError, SwitchBeeTokenError) as exp:
+            _LOGGER.error(
+                "Failed to set %s state to %s, error: %s",
+                self._attr_name,
+                command,
+                exp,
+            )
+            return
+
+        self.async_write_ha_state()
+
+    async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Async function to set position to cover."""
         last_position = self._attr_current_cover_position
         if (
