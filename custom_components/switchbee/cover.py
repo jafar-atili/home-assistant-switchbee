@@ -10,6 +10,8 @@ from switchbee.api import (
     SwitchBeeDeviceOfflineError,
 )
 
+from switchbee import SWITCHBEE_BRAND
+
 from homeassistant.components.cover import (
     ATTR_POSITION,
     CoverDeviceClass,
@@ -19,6 +21,7 @@ from homeassistant.components.cover import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -46,7 +49,7 @@ class Device(CoordinatorEntity, CoverEntity):
         """Initialize the SwitchBee cover."""
         super().__init__(coordinator)
         self._session = aiohttp_client.async_get_clientsession(hass)
-        self._attr_name = f"{device.zone} {device.name}"
+        self._attr_name = f"{device.name}"
         self._attr_unique_id = f"{coordinator.mac_formated}-{device.id}"
         self._device_id = device.id
         self._attr_current_cover_position = 0
@@ -61,10 +64,30 @@ class Device(CoordinatorEntity, CoverEntity):
         self._attr_device_class = CoverDeviceClass.SHUTTER
         self._attr_available = True
         self._attr_has_entity_name = True
+        self._device = device
 
     @property
     def available(self) -> bool:
         return self._attr_available
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            name=f"SwitchBee_{str(self._device.unit_id)}",
+            identifiers={
+                (
+                    DOMAIN,
+                    f"SwitchBee_{str(self._device.unit_id)}_{self.coordinator.mac_formated}",
+                )
+            },
+            manufacturer=SWITCHBEE_BRAND,
+            model=self.coordinator.api.module_display(self._device.unit_id),
+            suggested_area=self._device.zone,
+            via_device=(
+                DOMAIN,
+                f"{self.coordinator.api.name} ({self.coordinator.api.mac})",
+            ),
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:

@@ -11,4 +11,7 @@ CONF_DEFUALT_ALLOWED = [
     DeviceType.Switch.display,
     DeviceType.TimedPowerSwitch.display,
     DeviceType.TimedSwitch.display,
+    DeviceType.Dimmer.display,
+    DeviceType.Thermostat.display,
+    DeviceType.Shutter.display,
 ]

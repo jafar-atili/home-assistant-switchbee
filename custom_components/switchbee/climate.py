@@ -9,6 +9,8 @@ from switchbee.device import (
     SwitchBeeThermostat,
 )
 
+from switchbee import SWITCHBEE_BRAND
+
 from switchbee.const import (
     ThermostatFanSpeed,
     ThermostatMode,
@@ -23,6 +25,7 @@ from homeassistant.components.climate import ClimateEntity
 from homeassistant.helpers import aiohttp_client
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.climate.const import (
@@ -113,9 +116,29 @@ class Device(CoordinatorEntity, ClimateEntity):
         self._attr_temperature_unit = HVAC_UNIT_SB_TO_HASS[device.unit]
         self._attr_hvac_modes = [HVAC_MODE_SB_TO_HASS[mode] for mode in device.modes]
         self._attr_hvac_modes.append(HVACMode.OFF)
+        self._device = device
 
         # update device state
         self._update_device_attrs(device)
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            name=f"SwitchBee_{str(self._device.unit_id)}",
+            identifiers={
+                (
+                    DOMAIN,
+                    f"SwitchBee_{str(self._device.id)}_{self.coordinator.mac_formated}",
+                )
+            },
+            manufacturer=SWITCHBEE_BRAND,
+            model=self._device.hardware.display,
+            suggested_area=self._device.zone,
+            via_device=(
+                DOMAIN,
+                f"{self.coordinator.api.name} ({self.coordinator.api.mac})",
+            ),
+        )
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""
