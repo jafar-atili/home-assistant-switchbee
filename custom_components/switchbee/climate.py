@@ -117,28 +117,24 @@ class Device(CoordinatorEntity, ClimateEntity):
         self._attr_hvac_modes = [HVAC_MODE_SB_TO_HASS[mode] for mode in device.modes]
         self._attr_hvac_modes.append(HVACMode.OFF)
         self._device = device
-
-        # update device state
-        self._update_device_attrs(device)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            name=f"SwitchBee_{str(self._device.unit_id)}",
+        self._attr_device_info = DeviceInfo(
+            name=f"SwitchBee_{str(self._device.id)}",
             identifiers={
                 (
                     DOMAIN,
-                    f"SwitchBee_{str(self._device.id)}_{self.coordinator.mac_formated}",
+                    f"{str(self._device.id)}-{coordinator.mac_formated}",
                 )
             },
             manufacturer=SWITCHBEE_BRAND,
-            model=self._device.hardware.display,
-            suggested_area=self._device.zone,
+            model=coordinator.api.module_display(device.unit_id),
+            suggested_area=device.zone,
             via_device=(
                 DOMAIN,
-                f"{self.coordinator.api.name} ({self.coordinator.api.mac})",
+                f"{coordinator.api.name} ({coordinator.api.mac})",
             ),
         )
+        # update device state
+        self._update_device_attrs(device)
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to hass."""

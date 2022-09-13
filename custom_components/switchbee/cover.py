@@ -78,32 +78,23 @@ class Device(CoordinatorEntity, CoverEntity):
         self._attr_available = True
         self._attr_has_entity_name = True
         self._device = device
-
-    @property
-    def available(self) -> bool:
-        return self._attr_available
-
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        if self._device.type == DeviceType.Somfy:
-            return None
-
-        return DeviceInfo(
-            name=f"SwitchBee_{str(self._device.unit_id)}",
-            identifiers={
-                (
+        if self._device.type != DeviceType.Somfy:
+            self._attr_device_info = DeviceInfo(
+                name=f"SwitchBee_{str(device.unit_id)}",
+                identifiers={
+                    (
+                        DOMAIN,
+                        f"{str(device.unit_id)}-{coordinator.mac_formated}",
+                    )
+                },
+                manufacturer=SWITCHBEE_BRAND,
+                model=coordinator.api.module_display(device.unit_id),
+                suggested_area=device.zone,
+                via_device=(
                     DOMAIN,
-                    f"SwitchBee_{str(self._device.unit_id)}_{self.coordinator.mac_formated}",
-                )
-            },
-            manufacturer=SWITCHBEE_BRAND,
-            model=self.coordinator.api.module_display(self._device.unit_id),
-            suggested_area=self._device.zone,
-            via_device=(
-                DOMAIN,
-                f"{self.coordinator.api.name} ({self.coordinator.api.mac})",
-            ),
-        )
+                    f"{coordinator.api.name} ({coordinator.api.mac})",
+                ),
+            )
 
     @callback
     def _handle_coordinator_update(self) -> None:
