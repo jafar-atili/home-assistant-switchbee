@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from switchbee.api import CentralUnitWsRPC, CentralUnitPolling
+from switchbee.api import CentralUnitPolling, CentralUnitWsRPC
 from switchbee.api.central_unit import SwitchBeeError
 
 from homeassistant.config_entries import ConfigEntry
@@ -31,7 +31,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     user = entry.data[CONF_USERNAME]
     password = entry.data[CONF_PASSWORD]
     websession = async_get_clientsession(hass, verify_ssl=False)
-    api = CentralUnitPolling(central_unit, user, password, websession)
+    api: CentralUnitPolling | CentralUnitWsRPC = CentralUnitPolling(
+        central_unit, user, password, websession
+    )
 
     # First try to connect and fetch the version
     try:
@@ -40,8 +42,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady("Failed to connect to the Central Unit") from exp
 
     # Check if websocket version
+    assert isinstance(api.version, str)
     if "A.4.6" in api.version:
-        api = CentralUnitWsRPC(central_unit, user, password, websession, None)
+        api = CentralUnitWsRPC(central_unit, user, password, websession)
         await api.connect()
 
     coordinator = SwitchBeeCoordinator(
