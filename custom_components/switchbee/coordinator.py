@@ -6,10 +6,15 @@ from collections.abc import Mapping
 from datetime import timedelta
 import logging
 
-from switchbee.api import CentralUnitAPI, SwitchBeeError
-from switchbee.device import DeviceType, SwitchBeeBaseDevice
+from switchbee.api.central_unit import SwitchBeeError
+from switchbee.api import CentralUnitPolling, CentralUnitWsRPC
 
-from homeassistant.core import HomeAssistant
+from switchbee.device import (
+    DeviceType,
+    SwitchBeeBaseDevice,
+)
+
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -24,10 +29,10 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
     def __init__(
         self,
         hass: HomeAssistant,
-        swb_api: CentralUnitAPI,
+        swb_api: CentralUnitPolling | CentralUnitWsRPC,
     ) -> None:
         """Initialize."""
-        self.api: CentralUnitAPI = swb_api
+        self.api: CentralUnitPolling | CentralUnitWsRPC = swb_api
         self._reconnect_counts: int = 0
         self.mac_formatted: str | None = (
             None if self.api.mac is None else format_mac(self.api.mac)
@@ -37,8 +42,18 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=SCAN_INTERVAL_SEC),
+            update_interval=timedelta(seconds=SCAN_INTERVAL_SEC[type(self.api)]),
         )
+
+        # Register callback for notification WsRPC
+        if isinstance(self.api, CentralUnitWsRPC):
+            self.api.subscribe_updates(self._async_handle_update)
+
+    @callback
+    def _async_handle_update(self, push_data: dict) -> None:
+        """Manually update data and notify listeners."""
+        self.api.update_device_state_from_event(push_data)
+        self.async_set_updated_data(self.api.devices)
 
     async def _async_update_data(self) -> Mapping[int, SwitchBeeBaseDevice]:
         """Update data via library."""

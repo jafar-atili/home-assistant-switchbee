@@ -3,7 +3,7 @@ import logging
 from typing import Generic, TypeVar, cast
 
 from switchbee import SWITCHBEE_BRAND
-from switchbee.api import SwitchBeeDeviceOfflineError, SwitchBeeError
+from switchbee.api.central_unit import SwitchBeeDeviceOfflineError, SwitchBeeError
 from switchbee.device import DeviceType, SwitchBeeBaseDevice
 
 from homeassistant.helpers.entity import DeviceInfo
@@ -54,7 +54,7 @@ class SwitchBeeDeviceEntity(SwitchBeeEntity[_DeviceTypeT]):
             identifiers={
                 (
                     DOMAIN,
-                    f"{identifier}-{coordinator.mac_formatted}",
+                    f"{int(identifier)}-{coordinator.mac_formatted}",
                 )
             },
             manufacturer=SWITCHBEE_BRAND,
