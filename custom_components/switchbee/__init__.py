@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Check if websocket version
     assert isinstance(api.version, str)
-    if "A.4.6" in api.version:
+    if "1.4.6" in api.version:
         api = CentralUnitWsRPC(central_unit, user, password, websession)
         await api.connect()
 

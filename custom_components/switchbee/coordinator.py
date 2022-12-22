@@ -6,13 +6,9 @@ from collections.abc import Mapping
 from datetime import timedelta
 import logging
 
-from switchbee.api.central_unit import SwitchBeeError
 from switchbee.api import CentralUnitPolling, CentralUnitWsRPC
-
-from switchbee.device import (
-    DeviceType,
-    SwitchBeeBaseDevice,
-)
+from switchbee.api.central_unit import SwitchBeeError
+from switchbee.device import DeviceType, SwitchBeeBaseDevice
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import format_mac
@@ -24,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevice]]):
-    """Class to manage fetching Freedompro data API."""
+    """Class to manage fetching SwitchBee data API."""
 
     def __init__(
         self,
@@ -52,7 +48,8 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
     @callback
     def _async_handle_update(self, push_data: dict) -> None:
         """Manually update data and notify listeners."""
-        self.api.update_device_state_from_event(push_data)
+        assert isinstance(self.api, CentralUnitWsRPC)
+        _LOGGER.debug("Receieved update: %s", push_data)
         self.async_set_updated_data(self.api.devices)
 
     async def _async_update_data(self) -> Mapping[int, SwitchBeeBaseDevice]:

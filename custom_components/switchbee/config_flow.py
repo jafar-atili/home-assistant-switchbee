@@ -6,8 +6,6 @@ from typing import Any
 
 from switchbee.api.central_unit import SwitchBeeError
 from switchbee.api.polling import CentralUnitPolling
-from switchbee.api.wsrpc import CentralUnitWsRPC
-
 import voluptuous as vol
 
 from homeassistant import config_entries
