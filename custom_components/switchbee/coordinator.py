@@ -30,10 +30,12 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
         """Initialize."""
         self.api: CentralUnitPolling | CentralUnitWsRPC = swb_api
         self._reconnect_counts: int = 0
-        self.mac_formatted: str | None = (
-            None if self.api.mac is None else format_mac(self.api.mac)
+        assert self.api.mac is not None
+        self.unique_id = (
+            self.api.unique_id
+            if self.api.unique_id is not None
+            else format_mac(self.api.mac)
         )
-
         super().__init__(
             hass,
             _LOGGER,
@@ -49,7 +51,7 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
     def _async_handle_update(self, push_data: dict) -> None:
         """Manually update data and notify listeners."""
         assert isinstance(self.api, CentralUnitWsRPC)
-        _LOGGER.debug("Receieved update: %s", push_data)
+        _LOGGER.debug("Received update: %s", push_data)
         self.async_set_updated_data(self.api.devices)
 
     async def _async_update_data(self) -> Mapping[int, SwitchBeeBaseDevice]:
@@ -83,8 +85,8 @@ class SwitchBeeCoordinator(DataUpdateCoordinator[Mapping[int, SwitchBeeBaseDevic
                 raise UpdateFailed(
                     f"Error communicating with API: {exp}"
                 ) from SwitchBeeError
-            else:
-                _LOGGER.debug("Loaded devices")
+
+            _LOGGER.debug("Loaded devices")
 
         # Get the state of the devices
         try:
